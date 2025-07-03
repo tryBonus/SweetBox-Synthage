@@ -32,7 +32,10 @@ def portal(request):
         preset = presets.filter(id=preset_id).first()
     else:
         preset = presets.first()
-    knobs = preset.knob_set.all(preset=preset) if preset else Knob.objects.none()
+    if preset:
+        knobs = preset.knob_set.all()
+    else:
+        knobs = Knob.objects.none()
     firmware_path = None
 
     # for knob in knobs:

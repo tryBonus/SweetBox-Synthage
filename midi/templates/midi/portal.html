@@ -48,7 +48,7 @@
     <form method="post">
         {% csrf_token %}
         {{ knob_formset.management_form }}
-        {% if eprom_form.errors or knob_formset.non_form_errors or knob_formset.errors %}
+        {% if knob_formset.non_form_errors or knob_formset.errors %}
             <div class="alert alert-danger" role="alert">
                 <ul class="mb-0">
                     {% for error in knob_formset.non_form_errors %}
