@@ -20,7 +20,7 @@ from .forms import KeypressChannelForm
 def home(request):
     white_keys = [{'x': 20 + i * 58} for i in range(15)]
     black_keys = [{'x': 40 + i * 58} for i in [0,1,3,4,5,7,8,10,11,12]]
-    return render(request, 'midi/home.html', {})
+    return render(request, 'midi/home.html', {'hide_home_link': True})
 
 @login_required(login_url='login')
 def portal(request):

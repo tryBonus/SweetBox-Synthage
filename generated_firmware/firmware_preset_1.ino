@@ -1,9 +1,9 @@
 
 // SweetBox SYNTHAGE Firmware
 // Preset: First preset
-const int NUM_KNOBS = 1;
-int knobChannels[NUM_KNOBS] = { 1 };
-int knobCCs[NUM_KNOBS] = { 0 };
-int knobMins[NUM_KNOBS] = { 0 };
-int knobMaxs[NUM_KNOBS] = { 127 };
+const int NUM_KNOBS = 0;
+int knobChannels[NUM_KNOBS] = {  };
+int knobCCs[NUM_KNOBS] = {  };
+int knobMins[NUM_KNOBS] = {  };
+int knobMaxs[NUM_KNOBS] = {  };
 // ... rest of your firmware ...
