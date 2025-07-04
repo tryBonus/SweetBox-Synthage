@@ -61,6 +61,8 @@ def portal(request):
         if knob_formset.is_valid() and midi_form.is_valid():
             knob_formset.save()  # Save all knob settings for the preset
             preset.number_of_knobs = Knob.objects.filter(preset=preset).count()
+            # Update the keypress channel
+            preset.keys_channel = midi_form.cleaned_data['midi_channel']
             preset.save()
             # Improved firmware generation logic
             firmware_template = '''
@@ -94,7 +96,7 @@ int knobMaxs[NUM_KNOBS] = {{ {maxs} }};
             pass
     else:
         knob_formset = KnobFormSet(queryset=knobs, initial=[{'channel': 1, 'CC': 0, 'min': 0, 'max': 127, 'pin': 0}])
-        midi_form = KeypressChannelForm(initial={'midi_channel': 1})
+        midi_form = KeypressChannelForm(initial={'midi_channel': preset.keys_channel if preset else 1})
 
     download_url = None
     if firmware_path:
