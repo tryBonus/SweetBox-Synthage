@@ -76,7 +76,7 @@ def portal(request):
             for obj in knob_formset.deleted_objects:
                 obj.delete()
             
-            preset.number_of_knobs = len(knob_instances)
+            preset.number_of_knobs = knob_formset.total_form_count
             preset.keys_channel = midi_form.cleaned_data['midi_channel']
             new_name = preset_name_value.strip()
             if new_name and new_name != preset.name:
