@@ -366,9 +366,9 @@ function addRow() {
     tempDiv.innerHTML = newRow;
     var row = tempDiv.firstElementChild;
 
-    // Update all hidden fields' name/id and clear their value
-    var hiddenFields = row.querySelectorAll('input[type="hidden"]');
-    hiddenFields.forEach(function(input) {
+    // Update all form fields (hidden and visible) with the new index
+    var allInputs = row.querySelectorAll('input, select, textarea');
+    allInputs.forEach(function(input) {
         // Update name and id attributes to use the new index
         if (input.name) {
             input.name = input.name.replace('__prefix__', newIndex);
@@ -376,9 +376,17 @@ function addRow() {
         if (input.id) {
             input.id = input.id.replace('__prefix__', newIndex);
         }
-        // If this is the id field, clear its value for a new object
-        if (input.name.endsWith('-id')) {
+        // Clear the value for id fields (new objects shouldn't have an id)
+        if (input.name && input.name.endsWith('-id')) {
             input.value = '';
+        }
+    });
+
+    // Update any labels that reference form fields
+    var labels = row.querySelectorAll('label');
+    labels.forEach(function(label) {
+        if (label.getAttribute('for')) {
+            label.setAttribute('for', label.getAttribute('for').replace('__prefix__', newIndex));
         }
     });
 
@@ -391,6 +399,7 @@ function addRow() {
     var min = row.querySelector('input[name$="-min"]');
     var max = row.querySelector('input[name$="-max"]');
     var pin = row.querySelector('input[name$="-pin"]');
+    
     if (channel) channel.value = 1;
     if (cc) cc.value = newIndex;
     if (min) min.value = 0;

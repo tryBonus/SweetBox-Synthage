@@ -67,11 +67,20 @@ def portal(request):
         preset_name_value = request.POST.get('preset_name', preset.name if preset else '')
 
         if knob_formset.is_valid() and midi_form.is_valid():
-            knob_instances = knob_formset.save(commit=False)
-            # Assign preset to new/changed knobs
-            for knob in knob_instances:
-                knob.preset = preset
-                knob.save()
+            # Save all valid forms in the formset
+            knob_instances = []
+            for form in knob_formset:
+                if form.is_valid() and not form.cleaned_data.get('DELETE', False):
+                    if form.has_changed() or not form.instance.pk:
+                        # Save new instances or modified instances
+                        knob = form.save(commit=False)
+                        knob.preset = preset
+                        knob.save()
+                        knob_instances.append(knob)
+                    elif form.instance.pk:
+                        # Keep existing unchanged instances
+                        knob_instances.append(form.instance)
+            
             # Delete knobs marked for deletion
             for obj in knob_formset.deleted_objects:
                 obj.delete()
