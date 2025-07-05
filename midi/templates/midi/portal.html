@@ -94,12 +94,12 @@
                                    value="{{ preset_name_value|default:preset.name }}" required>
         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Keypress Channel</label>
+                            <label class="form-label fw-semibold">Keys Channel</label>
             {{ midi_form.midi_channel }}
         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Number of Knobs</label>
-            <input type="text" class="form-control" value="{{ knob_formset.total_form_count }}" readonly>
+            <input type="text" id="number-of-knobs" class="form-control" value="{{ knob_formset.total_form_count }}" readonly>
         </div>
                     </div>
                 </div>
@@ -203,6 +203,9 @@
         <!-- Hidden empty form template for JS cloning -->
         <div style="display:none;">
             <table><tbody><tr id="empty-form-row">
+                {% for hidden in knob_formset.empty_form.hidden_fields %}
+                    {{ hidden }}
+                {% endfor %}
                 <td class="text-center fw-semibold">__num__</td>
                 {% for field in knob_formset.empty_form.visible_fields %}
                     {% if field.name != 'DELETE' %}
@@ -343,6 +346,14 @@ input[type="checkbox"][name$="-DELETE"] {
 </style>
 
 <script>
+function updateNumberOfKnobs() {
+    var knobRows = document.querySelectorAll('#knob-table-body tr:not([style*="display: none"])');
+    var numberOfKnobsInput = document.getElementById('number-of-knobs');
+    if (numberOfKnobsInput) {
+        numberOfKnobsInput.value = knobRows.length;
+    }
+}
+
 function addRow() {
     var totalForms = document.querySelector('input[name$="-TOTAL_FORMS"]');
     var tableBody = document.getElementById('knob-table-body');
@@ -354,9 +365,26 @@ function addRow() {
     var tempDiv = document.createElement('tbody');
     tempDiv.innerHTML = newRow;
     var row = tempDiv.firstElementChild;
+
+    // Update all hidden fields' name/id and clear their value
+    var hiddenFields = row.querySelectorAll('input[type="hidden"]');
+    hiddenFields.forEach(function(input) {
+        // Update name and id attributes to use the new index
+        if (input.name) {
+            input.name = input.name.replace('__prefix__', newIndex);
+        }
+        if (input.id) {
+            input.id = input.id.replace('__prefix__', newIndex);
+        }
+        // If this is the id field, clear its value for a new object
+        if (input.name.endsWith('-id')) {
+            input.value = '';
+        }
+    });
+
     tableBody.appendChild(row);
     totalForms.value = newIndex + 1;
-    
+
     // Set default values for the new row
     var channel = row.querySelector('input[name$="-channel"]');
     var cc = row.querySelector('input[name$="-CC"]');
@@ -368,8 +396,9 @@ function addRow() {
     if (min) min.value = 0;
     if (max) max.value = 127;
     if (pin) pin.value = newIndex;
-    
+
     updateSerialNumbers();
+    updateNumberOfKnobs();
 }
 
 function deleteRow(btn) {
@@ -380,6 +409,7 @@ function deleteRow(btn) {
     }
     row.style.display = 'none';
     updateSerialNumbers();
+    updateNumberOfKnobs();
 }
 
 function updateSerialNumbers() {
@@ -394,6 +424,17 @@ function updateSerialNumbers() {
 
 document.addEventListener('DOMContentLoaded', function() {
     updateSerialNumbers();
+    updateNumberOfKnobs();
+    var form = document.querySelector('form[method="POST"]');
+    if (form) {
+        form.addEventListener('submit', function() {
+            var knobRows = document.querySelectorAll('#knob-table-body tr:not([style*="display: none"])');
+            var numberOfKnobsInput = document.getElementById('number-of-knobs');
+            if (numberOfKnobsInput) {
+                numberOfKnobsInput.value = knobRows.length;
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

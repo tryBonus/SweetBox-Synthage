@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 from .forms import KeypressChannelForm
+from django.urls import reverse
 # Create your views here.
 
 def create_default_preset(user):
@@ -47,7 +48,6 @@ def home(request):
 def portal(request):
     user = request.user
     presets = Preset.objects.filter(owner=user).order_by('-updated')
-    # preset = presets.first() if not presets.count() < 1 else None
     preset_id = request.GET.get('preset')
     if preset_id:
         preset = presets.filter(id=preset_id).first()
@@ -59,18 +59,22 @@ def portal(request):
         knobs = Knob.objects.none()
     firmware_path = None
 
+    knob_queryset = Knob.objects.filter(preset=preset)
+
     if request.method == 'POST':
-        knob_formset = KnobFormSet(request.POST, queryset=Knob.objects.filter(preset=preset))
+        knob_formset = KnobFormSet(request.POST, queryset=knob_queryset)
         midi_form = KeypressChannelForm(request.POST)
         preset_name_value = request.POST.get('preset_name', preset.name if preset else '')
 
         if knob_formset.is_valid() and midi_form.is_valid():
             knob_instances = knob_formset.save(commit=False)
-            # Delete the previous knob instances before saving a new one
-            Knob.objects.filter(preset=preset).delete()
+            # Assign preset to new/changed knobs
             for knob in knob_instances:
                 knob.preset = preset
                 knob.save()
+            # Delete knobs marked for deletion
+            for obj in knob_formset.deleted_objects:
+                obj.delete()
             
             preset.number_of_knobs = len(knob_instances)
             preset.keys_channel = midi_form.cleaned_data['midi_channel']
@@ -79,7 +83,7 @@ def portal(request):
                 preset.name = new_name
             preset.save()
             messages.success(request, f'Preset "{preset.name}" saved successfully!')
-            return redirect(f'/portal/?preset={preset.id}')
+            return redirect(f"{reverse('portal')}?preset={preset.id}")
         else:
             # On error, preserve entered values and show error messages
             messages.error(request, 'Please correct the errors below.')
@@ -95,7 +99,7 @@ def portal(request):
             }
             return render(request, 'midi/portal.html', context)
     else:
-        knob_formset = KnobFormSet(queryset=knobs, initial=[{'channel': 1, 'CC': 0, 'min': 0, 'max': 127, 'pin': 0}])
+        knob_formset = KnobFormSet(queryset=knob_queryset, initial=[{'channel': 1, 'CC': 0, 'min': 0, 'max': 127, 'pin': 0}])
         midi_form = KeypressChannelForm(initial={'midi_channel': preset.keys_channel if preset else 1})
         preset_name_value = preset.name if preset else ''
 
@@ -143,7 +147,7 @@ int knobMaxs[NUM_KNOBS] = {{ {maxs} }};
     with open(firmware_path, 'w') as f:
         f.write(firmware_content)
     messages.success(request, 'Settings saved and firmware generated!')
-    return redirect(request.path + f'?preset={preset.id}')
+    return redirect(f"{reverse('portal')}?preset={preset.id}")
     pass
 
 
@@ -153,7 +157,7 @@ def download_firmware(request, preset_id):
     firmware_path = os.path.join(firmware_dir, f'firmware_preset_{preset_id}.ino')
     if os.path.exists(firmware_path):
         return FileResponse(open(firmware_path, 'rb'), as_attachment=True, filename=f'firmware_preset_{preset_id}.ino')
-    return redirect('/portal/')
+    return redirect(reverse('portal'))
 
 
 @csrf_exempt

@@ -120,10 +120,6 @@ class KnobForm(ModelForm):
         cleaned_data = super().clean()
         min_value = cleaned_data.get('min')
         max_value = cleaned_data.get('max')
-        
-        if min_value is not None and max_value is not None and min_value > max_value:
-            raise forms.ValidationError('Minimum value cannot be greater than maximum value.')
-        
         return cleaned_data
 
 
