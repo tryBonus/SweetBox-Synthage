@@ -1,11 +1,14 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils.timezone import now
 
 class Preset(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=200)
     keys_channel = models.PositiveSmallIntegerField(default=1)
     number_of_knobs = models.PositiveSmallIntegerField(default=4)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
 
     objects = models.Manager()
 
@@ -20,7 +23,7 @@ class Knob(models.Model):
     CC = models.PositiveSmallIntegerField(default=24)
     min = models.IntegerField(default=0)
     max = models.IntegerField(default=127)
-    pin = models.IntegerField(default=1)
+    pin = models.IntegerField(default=0)
     # knob_index =
     # pin = 
 

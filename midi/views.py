@@ -3,6 +3,7 @@
 # generate firmware of class "preset", flash firmware to either atmega 32u4, rp2040 or esp32 s3
 
 from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from .forms import UserForm
 from .forms import KnobFormSet
 from .models import Preset, Knob
@@ -17,16 +18,36 @@ from django.contrib import messages
 from .forms import KeypressChannelForm
 # Create your views here.
 
+def create_default_preset(user):
+    if (Preset.objects.filter(owner=user).count() < 1) or (Preset.objects.filter(name='Default').count() < 1):
+        preset = Preset.objects.create(
+            owner = user,
+            name = 'Default',
+            keys_channel = 1,
+            number_of_knobs = 4,
+        )
+        for i in range(preset.number_of_knobs):
+            knob = Knob.objects.create(
+                preset=preset,
+                CC=i,
+                pin=i,
+            )
+
 def home(request):
-    white_keys = [{'x': 20 + i * 58} for i in range(15)]
-    black_keys = [{'x': 40 + i * 58} for i in [0,1,3,4,5,7,8,10,11,12]]
-    return render(request, 'midi/home.html', {'hide_home_link': True})
+    user = request.user
+    if user.is_authenticated:
+        create_default_preset(user)
+    context = {
+        'hide_home_link': True,
+    }   
+    return render(request, 'midi/home.html', context)
+
 
 @login_required(login_url='login')
 def portal(request):
     user = request.user
-    preset = request.GET.get('preset')
-    presets = Preset.objects.filter(owner=user)
+    presets = Preset.objects.filter(owner=user).order_by('-updated')
+    # preset = presets.first() if not presets.count() < 1 else None
     preset_id = request.GET.get('preset')
     if preset_id:
         preset = presets.filter(id=preset_id).first()
@@ -38,65 +59,45 @@ def portal(request):
         knobs = Knob.objects.none()
     firmware_path = None
 
-    # for knob in knobs:
-    #     temp = Knob.objects.create(
-    #         preset = preset, 
-    #         channel = , 
-    #         cc = , 
-    #         min = , 
-    #         max = , 
-    #         pin = ,
-    #     )
-
-    # preset = Preset.objects.create(
-    #     owner = user,
-    #     name = request.preset.preset_name, 
-    #     keys_channel = request.Post.get('keys_channel'),
-    #     number_of_knobs = knobs.count(),
-    # )
-
     if request.method == 'POST':
         knob_formset = KnobFormSet(request.POST, queryset=Knob.objects.filter(preset=preset))
         midi_form = KeypressChannelForm(request.POST)
+        preset_name_value = request.POST.get('preset_name', preset.name if preset else '')
+
         if knob_formset.is_valid() and midi_form.is_valid():
-            knob_formset.save()  # Save all knob settings for the preset
-            preset.number_of_knobs = Knob.objects.filter(preset=preset).count()
-            # Update the keypress channel
+            knob_instances = knob_formset.save(commit=False)
+            # Delete the previous knob instances before saving a new one
+            Knob.objects.filter(preset=preset).delete()
+            for knob in knob_instances:
+                knob.preset = preset
+                knob.save()
+            
+            preset.number_of_knobs = len(knob_instances)
             preset.keys_channel = midi_form.cleaned_data['midi_channel']
+            new_name = preset_name_value.strip()
+            if new_name and new_name != preset.name:
+                preset.name = new_name
             preset.save()
-            # Improved firmware generation logic
-            firmware_template = '''
-// SweetBox SYNTHAGE Firmware
-// Preset: {preset_name}
-const int NUM_KNOBS = {num_knobs};
-int knobChannels[NUM_KNOBS] = {{ {channels} }};
-int knobCCs[NUM_KNOBS] = {{ {ccs} }};
-int knobMins[NUM_KNOBS] = {{ {mins} }};
-int knobMaxs[NUM_KNOBS] = {{ {maxs} }};
-// ... rest of your firmware ...
-'''
-            knob_objs = Knob.objects.filter(preset=preset)
-            firmware_content = firmware_template.format(
-                preset_name=preset.name,
-                num_knobs=knob_objs.count(),
-                channels=', '.join(str(k.channel) for k in knob_objs),
-                ccs=', '.join(str(k.CC) for k in knob_objs),
-                mins=', '.join(str(k.min) for k in knob_objs),
-                maxs=', '.join(str(k.max) for k in knob_objs),
-            )
-            firmware_dir = os.path.join(settings.BASE_DIR, 'generated_firmware')
-            os.makedirs(firmware_dir, exist_ok=True)
-            firmware_path = os.path.join(firmware_dir, f'firmware_preset_{preset.id}.ino')
-            with open(firmware_path, 'w') as f:
-                f.write(firmware_content)
-            messages.success(request, 'Settings saved and firmware generated!')
-            return redirect(request.path + f'?preset={preset.id}')
+            messages.success(request, f'Preset "{preset.name}" saved successfully!')
+            return redirect(f'/portal/?preset={preset.id}')
         else:
-            # Errors will be shown in the template
-            pass
+            # On error, preserve entered values and show error messages
+            messages.error(request, 'Please correct the errors below.')
+            context = {
+                'knob_formset': knob_formset,
+                'preset': preset,
+                'presets': presets,
+                'download_url': None,
+                'hide_portal_link': True,
+                'midi_form': midi_form,
+                'preset_name_value': preset_name_value,
+                'form_errors': knob_formset.non_form_errors() + (midi_form.errors.get('__all__', []) if midi_form.errors else [])
+            }
+            return render(request, 'midi/portal.html', context)
     else:
         knob_formset = KnobFormSet(queryset=knobs, initial=[{'channel': 1, 'CC': 0, 'min': 0, 'max': 127, 'pin': 0}])
         midi_form = KeypressChannelForm(initial={'midi_channel': preset.keys_channel if preset else 1})
+        preset_name_value = preset.name if preset else ''
 
     download_url = None
     if firmware_path:
@@ -113,6 +114,39 @@ int knobMaxs[NUM_KNOBS] = {{ {maxs} }};
 
     return render(request, 'midi/portal.html', context)
 
+
+def generate_firmware(request):
+    preset = Preset.objects.get(id=1)
+    # Improved firmware generation logic
+    firmware_template = '''
+// SweetBox SYNTHAGE Firmware
+// Preset: {preset_name}
+const int NUM_KNOBS = {num_knobs};
+int knobChannels[NUM_KNOBS] = {{ {channels} }};
+int knobCCs[NUM_KNOBS] = {{ {ccs} }};
+int knobMins[NUM_KNOBS] = {{ {mins} }};
+int knobMaxs[NUM_KNOBS] = {{ {maxs} }};
+// ... rest of your firmware ...
+'''
+    knob_objs = Knob.objects.filter(preset=preset)
+    firmware_content = firmware_template.format(
+        preset_name=preset.name,
+        num_knobs=knob_objs.count(),
+        channels=', '.join(str(k.channel) for k in knob_objs),
+        ccs=', '.join(str(k.CC) for k in knob_objs),
+        mins=', '.join(str(k.min) for k in knob_objs),
+        maxs=', '.join(str(k.max) for k in knob_objs),
+    )
+    firmware_dir = os.path.join(settings.BASE_DIR, 'generated_firmware')
+    os.makedirs(firmware_dir, exist_ok=True)
+    firmware_path = os.path.join(firmware_dir, f'firmware_preset_{preset.id}.ino')
+    with open(firmware_path, 'w') as f:
+        f.write(firmware_content)
+    messages.success(request, 'Settings saved and firmware generated!')
+    return redirect(request.path + f'?preset={preset.id}')
+    pass
+
+
 @login_required(login_url='/login/')
 def download_firmware(request, preset_id):
     firmware_dir = os.path.join(settings.BASE_DIR, 'generated_firmware')
@@ -121,39 +155,81 @@ def download_firmware(request, preset_id):
         return FileResponse(open(firmware_path, 'rb'), as_attachment=True, filename=f'firmware_preset_{preset_id}.ino')
     return redirect('/portal/')
 
+
 @csrf_exempt
 @login_required(login_url='/login/')
 def create_preset(request):
     if request.method == 'POST':
         name = request.POST.get('name')
+        keys_channel = int(request.POST.get('keys_channel', 1))
         number_of_knobs = int(request.POST.get('number_of_knobs', 4))
         user = request.user
-        preset = Preset.objects.create(owner=user, name=name, number_of_knobs=number_of_knobs)
-        # Create default knobs for the preset
-        for i in range(number_of_knobs):
-            Knob.objects.create(preset=preset, channel=1, CC=24+i, min=0, max=127)
-        messages.success(request, f'Preset "{name}" created!')
-        return redirect(f'/portal/?preset={preset.id}')
-    return redirect('/portal/')
+
+        preset = Preset.objects.create(
+            owner=user,
+            name=name,
+            keys_channel=keys_channel,
+            number_of_knobs=number_of_knobs,
+        )
+        # Create the corresponding number of knob objects as stated in the preset
+        for i in range(preset.number_of_knobs):
+            knob = Knob.objects.create(
+                preset=preset,
+                channel=1,
+                CC=i,
+                min=0,
+                max=127,
+                pin=i
+            )
+
+        messages.success(request, f'Preset "{name}" created successfully!')
+        return redirect('dashboard')
+    return redirect('dashboard')
+
+
+@login_required(login_url='login')
+def delete_preset(request, pk):
+    preset = Preset.objects.get(id=pk)
+    obj = preset.name
+
+    if preset.owner != request.user:
+        return HttpResponse('You are not allowed to be here!!', content_type='text/plain')
+
+    if request.method == 'POST':
+        preset.delete()
+        return redirect('dashboard')
+
+    context = {
+        'obj':obj,
+        'preset':preset,
+    }
+    return render(request, 'midi/delete.html', context)
+
 
 def signUp(request):
     form = UserForm
+    page = 'signup'
     if request.method == 'POST':
         form = UserForm(request.POST)
         if form.is_valid:
             form.save()
-            return redirect('/')
+            # Create a default preset for new user
+            create_default_preset(request.user)
+            return redirect('login')
 
 
-    context = {'form':form}
-    return render(request, 'midi/login.html', context)
+    context = {
+        'form':form,
+        'page':page,
+    }
+    return render(request, 'midi/login_register.html', context)
+
 
 def login_view(request):
-
     page = 'login'
 
     if request.user.is_authenticated:
-        return redirect('/portal/')
+        return redirect('dashboard')
 
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
@@ -161,7 +237,7 @@ def login_view(request):
             user = form.get_user()
             login(request, user)
             messages.success(request, 'Logged in successfully!')
-            return redirect('/portal/')
+            return redirect('dashboard')
         else:
             messages.error(request, 'Invalid username or password.')
     else:
@@ -171,9 +247,25 @@ def login_view(request):
         'form': form,
         'page': page,
     }
-    return render(request, 'midi/login.html', context)
+    return render(request, 'midi/login_register.html', context)
+
 
 def logout_view(request):
     logout(request)
     messages.info(request, 'Logged out successfully!')
     return redirect('home')
+
+
+@login_required(login_url='login')
+def dashboard(request):
+    user = request.user
+    presets = Preset.objects.filter(owner=user)
+    preset_count = presets.count()
+
+    context = {
+        'hide_dashboard_link':True,
+        'presets':presets,
+        'preset_count':preset_count,
+    }   
+    return render(request, 'midi/dashboard.html', context)
+

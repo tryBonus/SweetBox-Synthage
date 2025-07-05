@@ -1,6 +1,6 @@
 
 // SweetBox SYNTHAGE Firmware
-// Preset: fourth (second)
+// Preset: kk
 const int NUM_KNOBS = 0;
 int knobChannels[NUM_KNOBS] = {  };
 int knobCCs[NUM_KNOBS] = {  };

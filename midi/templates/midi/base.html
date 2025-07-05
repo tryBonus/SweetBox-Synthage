@@ -72,23 +72,41 @@
             </div>
             <nav class="header-nav">
                 {% if not hide_home_link %}<a href="{% url 'home' %}">Home</a>{% endif %}
-                {% if not hide_portal_link %}<a href="{% url 'portal' %}">Portal</a>{% endif %}
-                {% if not hide_login_link %}
-                    {% if request.user.is_authenticated %}
-                    <a href="{% url 'logout' %}">Logout</a>
-                    {% else %}
-                    <a href="{% url 'login' %}">Login</a>
-                    <a href="{% url 'signup' %}">Sign Up</a>
+                <!-- if not on the login or signup page -->
+                {% if not page == 'login' or page == 'signup' %}
+                    {% if not hide_dashboard_link %}<a href="{% url 'dashboard' %}">Dashboard</a>{% endif %}
+                    {% if not hide_portal_link %}<a href="{% url 'portal' %}">Portal</a>{% endif %}
+                    {% if not hide_login_link %}
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'logout' %}">Logout</a>
+                        {% else %}
+                        <a href="{% url 'login' %}">Login</a>
+                        <a href="{% url 'signup' %}">Sign Up</a>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
             </nav>
         </div>
     </header>
-    {% block content %}{% endblock %}
+    {% block content %}
+    
+    {% endblock %}
     <footer class="text-center text-muted mt-5 mb-3" style="font-size:0.95rem;">
         &copy; 2025 SweetBox Synthage. All rights reserved.
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            document.querySelectorAll('.alert-success').forEach(function(alert) {
+                alert.classList.add('fade');
+                setTimeout(function() {
+                    alert.remove();
+                }, 500); // Wait for fade transition
+            });
+        }, 5000); // 5 seconds
+    });
+    </script>
 </body>
 </html> 

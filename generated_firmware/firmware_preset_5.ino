@@ -1,6 +1,6 @@
 
 // SweetBox SYNTHAGE Firmware
-// Preset: fff
+// Preset: asw
 const int NUM_KNOBS = 0;
 int knobChannels[NUM_KNOBS] = {  };
 int knobCCs[NUM_KNOBS] = {  };
