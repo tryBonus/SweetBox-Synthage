@@ -1,8 +1,9 @@
 from django import forms
-from django.forms import ModelForm, BaseModelFormSet, ValidationError
-from .models import Preset, Knob, Joystick, ModWheel, PitchWheel
+from django.forms import ModelForm, BaseModelFormSet, ValidationError, modelformset_factory
 from django.contrib.auth.models import User
-from django.forms import modelformset_factory
+
+# Local models actually referenced in this file
+from .models import Preset, Knob
 
 
 class UserForm(ModelForm):
