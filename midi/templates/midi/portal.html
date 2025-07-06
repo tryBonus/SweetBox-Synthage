@@ -99,7 +99,7 @@
         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Number of Knobs</label>
-            <input type="text" id="number-of-knobs" class="form-control" value="{{ knob_formset.total_form_count }}" readonly>
+            <input type="number" id="number-of-knobs" class="form-control" value="{{ knob_formset.total_form_count }}" min="0" max="24" readonly>
         </div>
                     </div>
                 </div>
@@ -152,13 +152,13 @@
                                                 </td>
                                             </tr>
                                         {% endif %}
-                                        <tr>
+                                        <tr draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropRow(event)">
                                             {% for hidden in form.hidden_fields %}
                                                 {{ hidden }}
                                             {% endfor %}
                                             <td class="text-center fw-semibold">{{ forloop.counter }}</td>
                                             {% for field in form.visible_fields %}
-                                                {% if field.name != 'DELETE' %}
+                                                {% if field.name not in ('DELETE', 'ORDER') %}
                                                     <td>
                                                         {{ field }}
                                                         {% if field.errors %}
@@ -171,6 +171,8 @@
                                                     </td>
                                                 {% endif %}
                                             {% endfor %}
+                                            {# Include hidden ORDER field #}
+                                            {{ form.ORDER }}
                                             <td class="text-center">
                                                 <button type="button" class="btn btn-outline-danger btn-sm" 
                                                         title="Delete knob" onclick="deleteRow(this)">
@@ -202,16 +204,17 @@
 
         <!-- Hidden empty form template for JS cloning -->
         <div style="display:none;">
-            <table><tbody><tr id="empty-form-row">
+            <table><tbody><tr id="empty-form-row" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropRow(event)">
                 {% for hidden in knob_formset.empty_form.hidden_fields %}
                     {{ hidden }}
                 {% endfor %}
                 <td class="text-center fw-semibold">__num__</td>
                 {% for field in knob_formset.empty_form.visible_fields %}
-                    {% if field.name != 'DELETE' %}
+                    {% if field.name not in ('DELETE', 'ORDER') %}
                         <td>{{ field }}</td>
                     {% endif %}
                 {% endfor %}
+                {{ knob_formset.empty_form.ORDER }}
                 <td class="text-center">
                     <button type="button" class="btn btn-outline-danger btn-sm" 
                             title="Delete knob" onclick="deleteRow(this)">
@@ -261,8 +264,8 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Number of Knobs</label>
-                        <input type="number" name="number_of_knobs" class="form-control" min="1" max="16" value="4" required>
-                        <div class="form-text">Choose between 1 and 16 knobs for your controller.</div>
+                        <input type="number" name="number_of_knobs" class="form-control" min="0" max="24" value="4" required>
+                        <div class="form-text">Choose between 0 and 24 knobs for your controller.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Keys Channel</label>
@@ -356,6 +359,10 @@ function updateNumberOfKnobs() {
 
 function addRow() {
     var totalForms = document.querySelector('input[name$="-TOTAL_FORMS"]');
+    if (parseInt(totalForms.value) >= 24) {
+        alert('Maximum of 24 knobs reached.');
+        return;
+    }
     var tableBody = document.getElementById('knob-table-body');
     var newIndex = parseInt(totalForms.value);
     var template = document.getElementById('empty-form-row').outerHTML;
@@ -367,7 +374,7 @@ function addRow() {
     var row = tempDiv.firstElementChild;
 
     // Update all hidden fields' name/id and clear their value
-    var hiddenFields = row.querySelectorAll('input[type="hidden"]');
+    var hiddenFields = row.querySelectorAll('input[type="hidden"], input[name$="-ORDER"]');
     hiddenFields.forEach(function(input) {
         // Update name and id attributes to use the new index
         if (input.name) {
@@ -397,8 +404,15 @@ function addRow() {
     if (max) max.value = 127;
     if (pin) pin.value = newIndex;
 
+    // Set ORDER field for new row
+    var orderInput = row.querySelector('input[name$="-ORDER"]');
+    if (orderInput) {
+        orderInput.value = newIndex;
+    }
+
     updateSerialNumbers();
     updateNumberOfKnobs();
+    updateOrderFields();
 }
 
 function deleteRow(btn) {
@@ -410,6 +424,7 @@ function deleteRow(btn) {
     row.style.display = 'none';
     updateSerialNumbers();
     updateNumberOfKnobs();
+    updateOrderFields();
 }
 
 function updateSerialNumbers() {
@@ -422,9 +437,54 @@ function updateSerialNumbers() {
     });
 }
 
+var dragSrcRow = null;
+
+function dragStart(e) {
+    dragSrcRow = e.currentTarget;
+    e.dataTransfer.effectAllowed = 'move';
+    // Needed for Firefox
+    e.dataTransfer.setData('text/html', dragSrcRow.outerHTML);
+}
+
+function dragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function dropRow(e) {
+    e.preventDefault();
+    var targetRow = e.currentTarget;
+    if (dragSrcRow === targetRow) return; // nothing to do
+
+    var tbody = document.getElementById('knob-table-body');
+    var rows = Array.from(tbody.children);
+    var srcIndex = rows.indexOf(dragSrcRow);
+    var tgtIndex = rows.indexOf(targetRow);
+
+    if (srcIndex < tgtIndex) {
+        tbody.insertBefore(dragSrcRow, targetRow.nextSibling);
+    } else {
+        tbody.insertBefore(dragSrcRow, targetRow);
+    }
+
+    updateSerialNumbers();
+    updateOrderFields();
+}
+
+function updateOrderFields() {
+    var rows = document.querySelectorAll('#knob-table-body tr:not([style*="display: none"])');
+    rows.forEach(function(row, idx) {
+        var orderInput = row.querySelector('input[name$="-ORDER"]');
+        if (orderInput) {
+            orderInput.value = idx;
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     updateSerialNumbers();
     updateNumberOfKnobs();
+    updateOrderFields();
     var form = document.querySelector('form[method="POST"]');
     if (form) {
         form.addEventListener('submit', function() {
